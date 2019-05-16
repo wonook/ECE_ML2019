@@ -8,7 +8,7 @@ import ast
 import tensorflow as tf
 
 current_directory = Path(__file__).absolute().parent
-default_data_directory = current_directory.joinpath('trivagoRecSysChallengeData2019_v2')
+default_data_directory = current_directory.joinpath('..', 'trivagoRecSysChallengeData2019_v2')
 
 GR_COLS = ["user_id", "session_id", "timestamp", "step"]
 

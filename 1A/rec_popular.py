@@ -4,9 +4,11 @@ import click
 import pandas as pd
 import math
 import numpy as np
+import ast
+import tensorflow as tf
 
 current_directory = Path(__file__).absolute().parent
-default_data_directory = current_directory.joinpath('trivagoRecSysChallengeData2019_v2')
+default_data_directory = current_directory.joinpath('..', 'trivagoRecSysChallengeData2019_v2')
 
 GR_COLS = ["user_id", "session_id", "timestamp", "step"]
 
@@ -20,21 +22,21 @@ def get_submission_target(df_test):
     return df_out
 
 
-def get_popularity(df_train):
-    """Get number of clicks that each item received in the df_train."""
+# def get_popularity(df_train):
+#     """Get number of clicks that each item received in the df_train."""
 
-    mask = df_train["action_type"] == "clickout item"
-    df_clicks = df_train[mask]
-    df_item_clicks = (
-        df_clicks
-        .groupby("reference")
-        .size()
-        .reset_index(name="n_clicks")
-        .transform(lambda x: x.astype(int))
-        .sort_values(by='n_clicks', ascending=False)
-    )
+#     mask = df_train["action_type"] == "clickout item"
+#     df_clicks = df_train[mask]
+#     df_item_clicks = (
+#         df_clicks
+#         .groupby("reference")
+#         .size()
+#         .reset_index(name="n_clicks")
+#         .transform(lambda x: x.astype(int))
+#         .sort_values(by='n_clicks', ascending=False)
+#     )
 
-    return df_item_clicks
+#     return df_item_clicks
 
 
 def string_to_array(s):
@@ -72,7 +74,7 @@ def encode_items(df_in):
 
     # print("DF:\n", df)
     df[col_expl].apply(save_item_meta_array)
-    # item_meta_list.sort()
+    item_meta_list.sort()
 
     print("ITEM_META_LIST_LEN:", len(item_meta_list))
     print("ITEM_META:", item_meta_list)
@@ -133,70 +135,66 @@ def merge_dfs(df_train_encoded, df_item_encoded):
     return df_out
 
 
-def explode(df_in, col_expl):
-    """Explode column col_expl of array type into multiple rows."""
+# def explode(df_in, col_expl):
+#     """Explode column col_expl of array type into multiple rows."""
 
-    df = df_in.copy()
-    df.loc[:, col_expl] = df[col_expl].apply(string_to_array)  # set value for the column
+#     df = df_in.copy()
+#     df.loc[:, col_expl] = df[col_expl].apply(string_to_array)  # set value for the column
 
-    df_out = pd.DataFrame(
-        {col: np.repeat(df[col].values,
-                        df[col_expl].str.len())
-         for col in df.columns.drop(col_expl)}
-    )
+#     df_out = pd.DataFrame(
+#         {col: np.repeat(df[col].values,
+#                         df[col_expl].str.len())
+#          for col in df.columns.drop(col_expl)}
+#     )
 
-    df_out.loc[:, col_expl] = np.concatenate(df[col_expl].values)
-    df_out.loc[:, col_expl] = df_out[col_expl].apply(int)
+#     df_out.loc[:, col_expl] = np.concatenate(df[col_expl].values)
+#     df_out.loc[:, col_expl] = df_out[col_expl].apply(int)
 
-    return df_out
+#     return df_out
 
+# def group_concat(df, gr_cols, col_concat):
+#     """Concatenate multiple rows into one."""
 
-def group_concat(df, gr_cols, col_concat):
-    """Concatenate multiple rows into one."""
+#     df_out = (
+#         df
+#         .groupby(gr_cols)[col_concat]
+#         .apply(lambda x: ' '.join(x))
+#         .to_frame()
+#         .reset_index()
+#     )
 
-    df_out = (
-        df
-        .groupby(gr_cols)[col_concat]
-        .apply(lambda x: ' '.join(x))
-        .to_frame()
-        .reset_index()
-    )
+#     return df_out
 
-    return df_out
+# def calc_recommendation(df_expl, df_pop):
+#     """Calculate recommendations based on popularity of items.
 
+#     The final data frame will have an impression list sorted according to the number of clicks per item in a reference data frame.
 
-def calc_recommendation(df_expl, df_pop):
-    """Calculate recommendations based on popularity of items.
+#     :param df_expl: Data frame with exploded impression list
+#     :param df_pop: Data frame with items and number of clicks
+#     :return: Data frame with sorted impression list according to popularity in df_pop
+#     """
 
-    The final data frame will have an impression list sorted according to the number of clicks per item in a reference data frame.
+#     df_expl_clicks = (
+#         df_expl[GR_COLS + ["impressions"]]
+#         .merge(df_pop,
+#                left_on="impressions",
+#                right_on="reference",
+#                how="left")
+#     )
 
-    :param df_expl: Data frame with exploded impression list
-    :param df_pop: Data frame with items and number of clicks
-    :return: Data frame with sorted impression list according to popularity in df_pop
-    """
+#     df_out = (
+#         df_expl_clicks
+#         .assign(impressions=lambda x: x["impressions"].apply(str))
+#         .sort_values(GR_COLS + ["n_clicks"],
+#                      ascending=[True, True, True, True, False])
+#     )
+#     print("DF_OUT1:\n", df_out)
 
-    df_expl_clicks = (
-        df_expl[GR_COLS + ["impressions"]]
-        .merge(df_pop,
-               left_on="impressions",
-               right_on="reference",
-               how="left")
-    )
+#     df_out = group_concat(df_out, GR_COLS, "impressions")
+#     df_out.rename(columns={'impressions': 'item_recommendations'}, inplace=True)
 
-    df_out = (
-        df_expl_clicks
-        .assign(impressions=lambda x: x["impressions"].apply(str))
-        .sort_values(GR_COLS + ["n_clicks"],
-                     ascending=[True, True, True, True, False])
-    )
-    print("DF_OUT1:\n", df_out)
-
-    df_out = group_concat(df_out, GR_COLS, "impressions")
-    df_out.rename(columns={'impressions': 'item_recommendations'}, inplace=True)
-
-    return df_out
-
-
+#     return df_out
 
 
 
@@ -247,7 +245,84 @@ def main(data_path):
 
     print("MERGED:\n", merged_dfs)
 
+    x_data = merged_dfs[['session_vec', 'properties']].values
+    print("X_DATA:\n", x_data)
 
+    y_data = merged_dfs['item_id'].values
+    print(y_data.dtype)
+    print("Y_DATA:\n", y_data)
+
+    y_data.shape += (1, )
+
+
+    n, p = x_data.shape
+
+    # number of latent factors
+    k = 5
+
+    # design matrix
+    X = tf.placeholder('float', shape=[n, p])
+    # target vector
+    y = tf.placeholder('float', shape=[n, 1])
+
+    # bias and weights
+    w0 = tf.Variable(tf.zeros([1]))
+    W = tf.Variable(tf.zeros([p]))
+
+    # interaction factors, randomly initialized 
+    V = tf.Variable(tf.random_normal([k, p], stddev=0.01))
+
+    # estimate of y, initialized to 0.
+    y_hat = tf.Variable(tf.zeros([n, 1]))
+    
+
+    linear_terms = tf.add(w0,
+      tf.reduce_sum(tf.multiply(W, X), 1, keep_dims=True))
+
+    interactions = (tf.multiply(0.5,
+        tf.reduce_sum(
+            tf.sub(
+                tf.pow( tf.matmul(X, tf.transpose(V)), 2),
+                tf.matmul(tf.pow(X, 2), tf.transpose(tf.pow(V, 2)))),
+            1, keep_dims=True)))
+
+    y_hat = tf.add(linear_terms, interactions)
+
+
+    # L2 regularized sum of squares loss function over W and V
+    lambda_w = tf.constant(0.001, name='lambda_w')
+    lambda_v = tf.constant(0.001, name='lambda_v')
+
+    l2_norm = (tf.reduce_sum(
+                tf.add(
+                    tf.multiply(lambda_w, tf.pow(W, 2)),
+                    tf.multiply(lambda_v, tf.pow(V, 2)))))
+
+    error = tf.reduce_mean(tf.square(tf.sub(y, y_hat)))
+    loss = tf.add(error, l2_norm)
+
+    eta = tf.constant(0.1)
+    optimizer = tf.train.AdagradOptimizer(eta).minimize(loss)
+
+
+    # that's a lot of iterations
+    N_EPOCHS = 1000
+    # Launch the graph.
+    init = tf.global_variables_initializer()
+    with tf.Session() as sess:
+        sess.run(init)
+
+        for epoch in range(N_EPOCHS):
+            indices = np.arange(n)
+            np.random.shuffle(indices)
+            x_data, y_data = x_data[indices], y_data[indices]
+            sess.run(optimizer, feed_dict={X: x_data, y: y_data})
+
+        print('MSE: ', sess.run(error, feed_dict={X: x_data, y: y_data}))
+        print('Loss (regularized error):', sess.run(cost, feed_dict={X: x_data, y: y_data}))
+        print('Predictions:', sess.run(y_hat, feed_dict={X: x_data, y: y_data}))
+        print('Learnt weights:', sess.run(W, feed_dict={X: x_data, y: y_data}))
+        print('Learnt factors:', sess.run(V, feed_dict={X: x_data, y: y_data}))
 
     # print("Get popular items...")
     # df_popular = get_popularity(df_train)
