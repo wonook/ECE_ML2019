@@ -132,7 +132,7 @@ def encode_sessions(df_in):
 def merge_dfs(df_train_encoded, df_item_encoded):
     df_out = (
         df_train_encoded.merge(df_item_encoded, left_on="item_id", right_on="item_id", how="left"))
-    return df_out
+    return df_out[df_out['properties'].notnull()]
 
 
 # def explode(df_in, col_expl):
@@ -245,14 +245,22 @@ def main(data_path):
 
     print("MERGED:\n", merged_dfs)
 
-    x_data = merged_dfs[['session_vec', 'properties']].values
+    vectors = []
+    for i in merged_dfs[['session_vec', 'properties']].itertuples(index=False):
+        print("I0", i[0].replace("[", "").replace("]", ""))
+        print("I1", i[1].replace("\n", "").replace("[", "").replace("]", ""))
+        if i[0] is not None and i[1] is not None:
+            vectors.append((np.fromstring(i[0].replace("[", "").replace("]", ""), dtype='int', sep=' '), 
+                            np.fromstring(i[1].replace("\n", "").replace("[", "").replace("]", ""), dtype='int', sep=' ')))
+            # print(vectors)
+    x_data = np.array(list(vectors))
     print("X_DATA:\n", x_data)
 
     y_data = merged_dfs['item_id'].values
+    y_data.shape += (1, )
     print(y_data.dtype)
     print("Y_DATA:\n", y_data)
 
-    y_data.shape += (1, )
 
 
     n, p = x_data.shape
