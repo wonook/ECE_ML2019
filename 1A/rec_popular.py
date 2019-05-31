@@ -234,7 +234,8 @@ def main(data_path):
     item_csv = data_directory.joinpath('item_metadata.csv')
     encoded_item_csv = data_directory.joinpath('item_metadata_encoded.csv')
     merged_csv = data_directory.joinpath('merged.csv')
-    subm_csv = data_directory.joinpath('submission_popular.csv')
+    subm_csv_bpr = data_directory.joinpath('submission_popular_bpr.csv')
+    subm_csv_top1 = data_directory.joinpath('submission_popular_top1.csv')
 
     print(f"Reading {test_csv} ...")
     df_test = pd.read_csv(test_csv)
@@ -327,7 +328,8 @@ def main(data_path):
     Vi = tf.Variable(tf.random_normal([k, q], stddev=0.01))
 
     # estimate of y, initialized to 0.
-    y_hat = tf.Variable(tf.zeros([n, 1]))
+    y_hat_pos = tf.Variable(tf.zeros([n, 1]))
+    y_hat_neg = tf.Variable(tf.zeros([n, 1]))
     
     y_hat_pos = get_yhat(Xs, Xip, Ws, Wi, Vs, Vi, w0)
     y_hat_neg = get_yhat(Xs, Xin, Ws, Wi, Vs, Vi, w0)
@@ -347,15 +349,38 @@ def main(data_path):
     loss_bpr = bpr(y_hat_pos, y_hat_neg)
     loss_top1 = top1(y_hat_pos, y_hat_neg)
 
-    eta = tf.constant(0.1)
+    eta = tf.constant(0.5)
     optimizer_bpr = tf.train.AdagradOptimizer(eta).minimize(loss_bpr)
     optimizer_top1 = tf.train.AdagradOptimizer(eta).minimize(loss_top1)
 
     # TODO: 
 
+    print("Get recommendations...")
+    df_target_encoded = encode_sessions(df_target)
+    df_expl = explode(df_target_encoded, "impressions")
+    print("EXPLODE:\n", df_expl)
+    merged_target = merge_dfs(df_expl, df_item_encoded, "item_id")
+    merged_target = merge_dfs(merged_target, df_item_encoded, "impressions")
+
+    test_x_s_vectors = []
+    test_x_ip_vectors = []
+    test_x_in_vectors = []
+    for i in merged_target[['session_vec', 'propertiesitem_id', 'propertiesimpressions']].itertuples(index=False):
+        # print("I0", i[0])
+        # print("I1", i[1].replace("\n", "").replace("[", "").replace("]", ""))
+        test_x_s_vectors.append(np.fromstring(i[0].replace("[", "").replace("]", ""), dtype='int', sep=' '))
+        test_x_ip_vectors.append(np.fromstring(i[1].replace("\n", "").replace("[", "").replace("]", ""), dtype='int', sep=' '))
+        test_x_in_vectors.append(np.fromstring(i[2].replace("\n", "").replace("[", "").replace("]", ""), dtype='int', sep=' '))
+        # print(vectors)
+    test_x_s_data = np.array(list(x_s_vectors))
+    test_x_ip_data = np.array(list(x_ip_vectors))
+    test_x_in_data = np.array(list(x_in_vectors))
+    print("Test Xs_DATA:\n", test_x_s_data, "(",  test_x_s_data.shape, ")")
+    print("Test Xi+_DATA:\n", test_x_ip_data, "(",  test_x_ip_data.shape, ")")
+    print("Test Xi-_DATA:\n", test_x_in_data, "(",  test_x_in_data.shape, ")")
 
     # that's a lot of iterations
-    N_EPOCHS = 1000
+    N_EPOCHS = 10
     # Launch the graph.
     init = tf.global_variables_initializer()
     with tf.Session() as sess:
@@ -370,7 +395,11 @@ def main(data_path):
         print("==BPR==")
         print('MSE: ', sess.run(error, feed_dict={Xs: x_s_data, Xip: x_ip_data, Xin: x_in_data, y: y_data}))
         print('Loss:', sess.run(loss_bpr, feed_dict={Xs: x_s_data, Xip: x_ip_data, Xin: x_in_data, y: y_data}))
-        # print('Predictions:', sess.run(y_hat, feed_dict={Xs: x_s_data, Xip: x_ip_data, Xin: x_in_data, y: y_data}))
+        results_bpr = sess.run(y_hat_pos, feed_dict={Xs: test_x_s_data, Xip: test_x_ip_data, Xin: test_x_in_data})
+        print('Predictions:', results_bpr)
+        df_out_bpr = merge_results(df_expl, results_bpr)
+        print("DF_OUT:\n", df_out_bpr)
+        df_out_bpr.to_csv(subm_csv_bpr, index=False)
         # print('Learnt session weights:', sess.run(Ws, feed_dict={Xs: x_s_data, Xip: x_ip_data, Xin: x_in_data, y: y_data}))
         # print('Learnt item weights:', sess.run(Wi, feed_dict={Xs: x_s_data, Xip: x_ip_data, Xin: x_in_data, y: y_data}))
         # print('Learnt session factors:', sess.run(Vs, feed_dict={Xs: x_s_data, Xip: x_ip_data, Xin: x_in_data, y: y_data}))
@@ -389,7 +418,11 @@ def main(data_path):
         print("==TOP1==")
         print('MSE: ', sess.run(error, feed_dict={Xs: x_s_data, Xip: x_ip_data, Xin: x_in_data, y: y_data}))
         print('Loss:', sess.run(loss_top1, feed_dict={Xs: x_s_data, Xip: x_ip_data, Xin: x_in_data, y: y_data}))
-        # print('Predictions:', sess.run(y_hat, feed_dict={Xs: x_s_data, Xip: x_ip_data, Xin: x_in_data, y: y_data}))
+        results_top1 = sess.run(y_hat_pos, feed_dict={Xs: test_x_s_data, Xip: test_x_ip_data, Xin: test_x_in_data})
+        print('Predictions:', results_top1)
+        df_out_top1 = merge_results(df_expl, results_top1)
+        print("DF_OUT:\n", df_out_top1)
+        df_out_top1.to_csv(subm_csv_top1, index=False)
         # print('Learnt session weights:', sess.run(Ws, feed_dict={Xs: x_s_data, Xip: x_ip_data, Xin: x_in_data, y: y_data}))
         # print('Learnt item weights:', sess.run(Wi, feed_dict={Xs: x_s_data, Xip: x_ip_data, Xin: x_in_data, y: y_data}))
         # print('Learnt session factors:', sess.run(Vs, feed_dict={Xs: x_s_data, Xip: x_ip_data, Xin: x_in_data, y: y_data}))
@@ -399,9 +432,6 @@ def main(data_path):
     # df_popular = get_popularity(df_train)
     # print("DF_POPULAR:\n", df_popular)
 
-    # print("Get recommendations...")
-    # df_expl = explode(df_target, "impressions")
-    # print("EXPLODE:\n", df_expl)
     # df_out = calc_recommendation(df_expl, df_popular)
     # print("DF_OUT:\n", df_out)
 
