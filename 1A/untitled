@@ -1,0 +1,41 @@
+
+
+
+ITEM ENCODED
+
+item_id,properties
+5101,"[0 0 0 1 0 1 1 0 1 0 1 0 1 1 0 0 0 0 1 0 0 0 1 0 1 1 1 0 1 0 0 1 0 0 1 0 1
+ 0 0 1 1 0 0 0 1 0 0 0 0 1 0 1 1 1 0 1 1 0 0 0 0 1 1 1 0 1 1 0 1 0 1 0 0 0
+ 0 0 0 0 0 0 1 1 0 0 1 1 1 0 0 0 0 1 1 1 0 0 1 0 0 1 0 1 0 0 0 1 1 0 1 1 0
+ 1 0 1 0 1 1 0 1 1 0 0 0 0 0 1 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 1 1 1 1
+ 0 0 0 0 0 0 0 1 1]"
+
+
+ITEM
+
+item_id,properties
+5101,Satellite TV|Golf Course|Airport Shuttle|Cosmetic Mirror|Safe (Hotel)|Telephone|Hotel|Sitting Area (Rooms)|Reception (24/7)|Air Conditioning|Hypoallergenic Rooms|Cable TV|Hotel Bar|Pool Table|Bathtub|Satisfactory Rating|Room Service|Luxury Hotel|Terrace (Hotel)|Television|Minigolf|Business Hotel|Shower|Cot|Gym|Hairdryer|Hypoallergenic Bedding|Accessible Parking|From 3 Stars|Good Rating|Radio|4 Star|From 4 Stars|Family Friendly|Desk|Tennis Court (Indoor)|Balcony|WiFi (Public Areas)|Openable Windows|Express Check-In / Check-Out|Restaurant|Laundry Service|Ironing Board|Tennis Court|From 2 Stars|Business Centre|Bowling|Conference Rooms|Electric Kettle|Accessible Hotel|Porter|Bike Rental|Non-Smoking Rooms|Car Park|Safe (Rooms)|Fitness|Fan|Flatscreen TV|Computer with Internet|WiFi (Rooms)|Lift|Central Heating
+
+
+
+TRAIN ENCODED
+
+session_id,user_id,timestamp,step,item_id,impressions,prices,session_vec
+00000510f1adc,WT30CXPIG450,1541064087,1,7281198,2661832|9222426|7051844|4079190|5752778|4683984|7281198|2841236|4480924|4673504|9213352|10684446|7184754|4529374|4450520|7192584|9795808|6027884|5930490|4706812|5940680|5077956|9415516|7038604|7187604,46|26|16|38|12|20|21|27|13|21|36|9|144|19|8|19|22|20|9|16|21|15|65|20|20,[1 0 0 0 0 0 0 0 0 0]
+00003f3b20954,CITFOTN2IT5P,1541097696,1,979325,87132|886881|486611|979325|87173|87175|149508|131633|591001|662606|2590457|91350|4765858|128201|127538|127411|14230|91356|2256994|889723|2304072|1346934|7213818|590791|9671210,330|187|437|159|499|324|476|381|424|159|144|190|502|481|381|482|182|158|505|720|110|330|570|492|450,[2 0 0 0 0 0 0 0 0 0]
+
+TRAIN
+
+user_id,session_id,timestamp,step,action_type,reference,platform,city,device,current_filters,impressions,prices
+00RL8Z82B2Z1,aff3928535f48,1541037460,1,search for poi,Newtown,AU,"Sydney, Australia",mobile,,,
+00RL8Z82B2Z1,aff3928535f48,1541037522,2,interaction item image,666856,AU,"Sydney, Australia",mobile,,,
+
+
+
+
+
+TEST
+
+user_id,session_id,timestamp,step,action_type,reference,platform,city,device,current_filters,impressions,prices
+004A07DM0IDW,1d688ec168932,1541555614,1,interaction item image,2059240,CO,"Santa Marta, Colombia",mobile,,,
+004A07DM0IDW,1d688ec168932,1541555614,2,interaction item image,2059240,CO,"Santa Marta, Colombia",mobile,,,

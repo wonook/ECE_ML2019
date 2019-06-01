@@ -108,7 +108,7 @@ def encode_session(session_df):
         action_type = row['action_type']
         reference = row['reference']
         if action_type == 'clickout item':
-            arr.append([row['user_id'], row['timestamp'], row['step'], int(reference), row['impressions'], row['prices'], encoding])
+            arr.append([row['user_id'], row['timestamp'], row['step'], int(reference) if reference is not None and not math.isnan(reference) else reference, row['impressions'], row['prices'], encoding])
         if reference not in session_ref_meta[action_type]:
             session_ref_meta[action_type].append(reference)
         encoding[session_meta_list.index(action_type)] = session_ref_meta[action_type].index(reference) + 1
@@ -175,6 +175,15 @@ def explode(df_in, col_expl):
 
     return df_out
 
+def merge_results(df_expl, results):
+    arr = []
+    for index, row in df_expl.iterrows():
+        arr.append([row['user_id'], row['session_id'], row['timestamp'], row['step'], results[index]])
+    if arr:
+        df_out = pd.DataFrame(np.array(arr), columns=['user_id', 'session_id', 'timestamp', 'step', 'item_recommendations'])
+        return df_out
+
+
 # def group_concat(df, gr_cols, col_concat):
 #     """Concatenate multiple rows into one."""
 
@@ -234,6 +243,7 @@ def main(data_path):
     item_csv = data_directory.joinpath('item_metadata.csv')
     encoded_item_csv = data_directory.joinpath('item_metadata_encoded.csv')
     merged_csv = data_directory.joinpath('merged.csv')
+    merged_target_csv = data_directory.joinpath('merged_target.csv')
     subm_csv_bpr = data_directory.joinpath('submission_popular_bpr.csv')
     subm_csv_top1 = data_directory.joinpath('submission_popular_top1.csv')
 
@@ -245,6 +255,18 @@ def main(data_path):
     print("DF_TARGET:\n", df_target)
 
     merged_dfs = None
+    df_item_encoded = None
+
+    if not encoded_item_csv.is_file():
+        print(f"Reading {item_csv} ...")
+        df_item = pd.read_csv(item_csv)
+        df_item_masked = df_item[df_item['item_id'].isin(df_train_encoded['item_id'])]
+        print("MASKED_ITEM:\n", df_item_masked)
+        df_item_encoded = encode_items(df_item_masked)
+        df_item_encoded.to_csv(encoded_item_csv, index=False)
+    else:
+        df_item_encoded = pd.read_csv(encoded_item_csv)
+    print("DF_ITEM:\n", df_item_encoded)
 
     if not merged_csv.is_file():
         if not encoded_train_csv.is_file():
@@ -260,19 +282,6 @@ def main(data_path):
         print("DF_SESSION:\n", df_train_encoded)
         df_train_encoded_expl = explode(df_train_encoded, "impressions")
         print("DF_SESSION_EXPL:\n", df_train_encoded_expl)
-
-
-        if not encoded_item_csv.is_file():
-            print(f"Reading {item_csv} ...")
-            df_item = pd.read_csv(item_csv)
-            df_item_masked = df_item[df_item['item_id'].isin(df_train_encoded['item_id'])]
-            print("MASKED_ITEM:\n", df_item_masked)
-            df_item_encoded = encode_items(df_item_masked)
-            df_item_encoded.to_csv(encoded_item_csv, index=False)
-        else:
-            df_item_encoded = pd.read_csv(encoded_item_csv)
-
-        print("DF_ITEM:\n", df_item_encoded)
 
         merged_dfs = merge_dfs(df_train_encoded_expl, df_item_encoded, "item_id")
         merged_dfs = merge_dfs(merged_dfs, df_item_encoded, "impressions")
@@ -304,19 +313,53 @@ def main(data_path):
     print(y_data.dtype)
     print("Y_DATA:\n", y_data, "(",  y_data.shape, ")")
 
-
     n, p = x_s_data.shape
     n, q = x_ip_data.shape
 
+    # TODO: 
+    merged_target = None
+
+    if not merged_target_csv.is_file():
+        print("Get recommendations...")
+        df_target_encoded = encode_sessions(df_target)
+        df_expl = explode(df_target_encoded, "impressions")
+        print("EXPLODE:\n", df_expl)
+        merged_target = merge_dfs(df_expl, df_item_encoded, "impressions")
+        merged_target.to_csv(merged_target_csv, index=False)
+    else:
+    	merged_target = pd.read_csv(merged_target_csv)
+    
+    print("EXPL_MERGED:\n", merged_target)
+
+
+    test_x_s_vectors = []
+    test_x_ip_vectors = []
+    for i in merged_target[['session_vec', 'propertiesimpressions']].itertuples(index=False):
+        # print("I0", i[0])
+        # print("I1", i[1].replace("\n", "").replace("[", "").replace("]", ""))
+        a = i[0] if type(i[0]).__module__ == np.__name__ else np.fromstring(i[0].replace("[", "").replace("]", ""), dtype='int', sep=' ') 
+        test_x_s_vectors.append(a)
+        test_x_ip_vectors.append(np.fromstring(i[1].replace("\n", "").replace("[", "").replace("]", ""), dtype='int', sep=' '))
+        # print(vectors)
+    test_x_s_data = np.array(list(x_s_vectors))
+    test_x_ip_data = np.array(list(x_ip_vectors))
+    print("Test Xs_DATA:\n", test_x_s_data, "(",  test_x_s_data.shape, ")")
+    print("Test Xi+_DATA:\n", test_x_ip_data, "(",  test_x_ip_data.shape, ")")
+
+    nt, pt = test_x_s_data.shape
+    nt, qt = test_x_ip_data.shape
+
+
     # number of latent factors
     k = 5
+    batch_size = 1024
 
     # design matrix
-    Xs = tf.placeholder('float', shape=[n, p])
-    Xip = tf.placeholder('float', shape=[n, q])
-    Xin = tf.placeholder('float', shape=[n, q])
+    Xs = tf.placeholder('float', shape=[None, p])
+    Xip = tf.placeholder('float', shape=[None, q])
+    Xin = tf.placeholder('float', shape=[None, q])
     # target vector
-    y = tf.placeholder('float', shape=[n, 1])
+    y = tf.placeholder('float', shape=[None, 1])
 
     # bias and weights
     w0 = tf.Variable(tf.zeros([1]))
@@ -328,8 +371,8 @@ def main(data_path):
     Vi = tf.Variable(tf.random_normal([k, q], stddev=0.01))
 
     # estimate of y, initialized to 0.
-    y_hat_pos = tf.Variable(tf.zeros([n, 1]))
-    y_hat_neg = tf.Variable(tf.zeros([n, 1]))
+    y_hat_pos = tf.Variable(tf.zeros([batch_size, 1]))
+    y_hat_neg = tf.Variable(tf.zeros([batch_size, 1]))
     
     y_hat_pos = get_yhat(Xs, Xip, Ws, Wi, Vs, Vi, w0)
     y_hat_neg = get_yhat(Xs, Xin, Ws, Wi, Vs, Vi, w0)
@@ -343,59 +386,44 @@ def main(data_path):
     #                 tf.multiply(lambda_w, tf.pow(W, 2)),
     #                 tf.multiply(lambda_v, tf.pow(V, 2)))))
 
-    error = tf.reduce_mean(tf.square(tf.subtract(y, y_hat_pos)))
+    # error = tf.reduce_mean(tf.square(tf.subtract(y, y_hat_pos)))
     # loss = tf.add(error, l2_norm)
 
     loss_bpr = bpr(y_hat_pos, y_hat_neg)
     loss_top1 = top1(y_hat_pos, y_hat_neg)
 
-    eta = tf.constant(0.5)
+    eta = tf.constant(0.2)
     optimizer_bpr = tf.train.AdagradOptimizer(eta).minimize(loss_bpr)
     optimizer_top1 = tf.train.AdagradOptimizer(eta).minimize(loss_top1)
 
-    # TODO: 
 
-    print("Get recommendations...")
-    df_target_encoded = encode_sessions(df_target)
-    df_expl = explode(df_target_encoded, "impressions")
-    print("EXPLODE:\n", df_expl)
-    merged_target = merge_dfs(df_expl, df_item_encoded, "item_id")
-    merged_target = merge_dfs(merged_target, df_item_encoded, "impressions")
 
-    test_x_s_vectors = []
-    test_x_ip_vectors = []
-    test_x_in_vectors = []
-    for i in merged_target[['session_vec', 'propertiesitem_id', 'propertiesimpressions']].itertuples(index=False):
-        # print("I0", i[0])
-        # print("I1", i[1].replace("\n", "").replace("[", "").replace("]", ""))
-        test_x_s_vectors.append(np.fromstring(i[0].replace("[", "").replace("]", ""), dtype='int', sep=' '))
-        test_x_ip_vectors.append(np.fromstring(i[1].replace("\n", "").replace("[", "").replace("]", ""), dtype='int', sep=' '))
-        test_x_in_vectors.append(np.fromstring(i[2].replace("\n", "").replace("[", "").replace("]", ""), dtype='int', sep=' '))
-        # print(vectors)
-    test_x_s_data = np.array(list(x_s_vectors))
-    test_x_ip_data = np.array(list(x_ip_vectors))
-    test_x_in_data = np.array(list(x_in_vectors))
-    print("Test Xs_DATA:\n", test_x_s_data, "(",  test_x_s_data.shape, ")")
-    print("Test Xi+_DATA:\n", test_x_ip_data, "(",  test_x_ip_data.shape, ")")
-    print("Test Xi-_DATA:\n", test_x_in_data, "(",  test_x_in_data.shape, ")")
-
-    # that's a lot of iterations
-    N_EPOCHS = 10
+    N_EPOCHS = 50
     # Launch the graph.
     init = tf.global_variables_initializer()
     with tf.Session() as sess:
         sess.run(init)
 
         for epoch in range(N_EPOCHS):
-            indices = np.arange(n)
-            np.random.shuffle(indices)
-            x_s_data, x_ip_data, x_in_data, y_data = x_s_data[indices], x_ip_data[indices], x_in_data[indices], y_data[indices]
-            sess.run(optimizer_bpr, feed_dict={Xs: x_s_data, Xip: x_ip_data, Xin: x_in_data, y: y_data})
+            epoch_loss = []
+            for j in range(0, n, batch_size):
+                upper_bound = min(j + batch_size, n)
+                indices = np.arange(j, upper_bound)
+                # np.random.shuffle(indices)
+                x_s_data_feed, x_ip_data_feed, x_in_data_feed, y_data_feed = x_s_data[indices], x_ip_data[indices], x_in_data[indices], y_data[indices]
+                print("==BPR==")
+                optimizer_bpr_res, error_res, loss_bpr_res = sess.run([optimizer_bpr, error, loss_bpr], feed_dict={Xs: x_s_data_feed, Xip: x_ip_data_feed, Xin: x_in_data_feed, y: y_data_feed})
+                print('MSE: ', error_res)
+                print('Loss:', loss_bpr_res)
+                epoch_loss.append(loss_bpr_res)
+            print('[epoch {}]: mean target value: {}'.format(epoch, np.mean(epoch_loss)))
 
-        print("==BPR==")
-        print('MSE: ', sess.run(error, feed_dict={Xs: x_s_data, Xip: x_ip_data, Xin: x_in_data, y: y_data}))
-        print('Loss:', sess.run(loss_bpr, feed_dict={Xs: x_s_data, Xip: x_ip_data, Xin: x_in_data, y: y_data}))
-        results_bpr = sess.run(y_hat_pos, feed_dict={Xs: test_x_s_data, Xip: test_x_ip_data, Xin: test_x_in_data})
+        results_bpr = []
+        for j in range(0, nt, batch_size):
+            upper_bound = min(j + batch_size, nt)
+            indices = np.arange(j, upper_bound)
+            test_x_s_data_feed, test_x_ip_data_feed = test_x_s_data[indices], test_x_ip_data[indices]
+            results_bpr.append(sess.run(y_hat_pos, feed_dict={Xs: test_x_s_data_feed, Xip: test_x_ip_data_feed}))
         print('Predictions:', results_bpr)
         df_out_bpr = merge_results(df_expl, results_bpr)
         print("DF_OUT:\n", df_out_bpr)
@@ -410,15 +438,25 @@ def main(data_path):
         sess.run(init)
 
         for epoch in range(N_EPOCHS):
-            indices = np.arange(n)
-            np.random.shuffle(indices)
-            x_s_data, x_ip_data, x_in_data, y_data = x_s_data[indices], x_ip_data[indices], x_in_data[indices], y_data[indices]
-            sess.run(optimizer_top1, feed_dict={Xs: x_s_data, Xip: x_ip_data, Xin: x_in_data, y: y_data})
+            epoch_loss = []
+            for j in range(0, n, batch_size):
+                upper_bound = min(j + batch_size, n)
+                indices = np.arange(j, upper_bound)
+                # np.random.shuffle(indices)
+                x_s_data_feed, x_ip_data_feed, x_in_data_feed, y_data_feed = x_s_data[indices], x_ip_data[indices], x_in_data[indices], y_data[indices]
+                print("==TOP1==")
+                optimizer_top_res, error_res, loss_top1_res = sess.run([optimizer_top1, error, loss_top1], feed_dict={Xs: x_s_data_feed, Xip: x_ip_data_feed, Xin: x_in_data_feed, y: y_data_feed})
+                print('MSE: ', error_res)
+                print('Loss:', loss_top1_res)
+                epoch_loss.append(loss_top1_res)
+            print('[epoch {}]: mean target value: {}'.format(epoch, np.mean(epoch_loss)))
 
-        print("==TOP1==")
-        print('MSE: ', sess.run(error, feed_dict={Xs: x_s_data, Xip: x_ip_data, Xin: x_in_data, y: y_data}))
-        print('Loss:', sess.run(loss_top1, feed_dict={Xs: x_s_data, Xip: x_ip_data, Xin: x_in_data, y: y_data}))
-        results_top1 = sess.run(y_hat_pos, feed_dict={Xs: test_x_s_data, Xip: test_x_ip_data, Xin: test_x_in_data})
+        results_top1 = []
+        for j in range(0, nt, batch_size):
+            upper_bound = min(j + batch_size, nt)
+            indices = np.arange(j, upper_bound)
+            test_x_s_data_feed, test_x_ip_data_feed = test_x_s_data[indices], test_x_ip_data[indices]
+            results_top1.append(sess.run(y_hat_pos, feed_dict={Xs: test_x_s_data_feed, Xip: test_x_ip_data_feed}))
         print('Predictions:', results_top1)
         df_out_top1 = merge_results(df_expl, results_top1)
         print("DF_OUT:\n", df_out_top1)
