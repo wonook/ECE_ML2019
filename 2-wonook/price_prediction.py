@@ -209,8 +209,8 @@ def main(data_path):
 
     labels = dtest.get_label()
 
-    param = {'max_depth': 10, 'colsample_bytree': 0.3, 'eta': 0.9, 'verbosity': 1, 'objective': 'reg:linear', 'alpha': 10}
-    # param = {'max_depth': 10, 'eta': 0.8, 'verbosity': 1, 'objective': 'reg:squarederror'}
+    param = {'max_depth': 5, 'colsample_bytree': 0.3, 'eta': 0.1, 'verbosity': 1, 'objective': 'reg:linear', 'alpha': 10}
+    print('LIN REG')
     
     watchlist = [(dtest, 'eval'), (dtrain, 'train')]
     num_round = 100
@@ -221,17 +221,17 @@ def main(data_path):
 
 
     preds = bst.predict(dtest)
-    error = (sum(1 for i in range(len(preds)) if abs(preds[i] - labels[i]) > allowance) / float(len(preds))) if len(preds) > 0 else 1.0
-    print('error=%f' % error)
-    error = (sum(1 for i in range(len(preds)) if abs(preds[i] - labels[i]) > 1) / float(len(preds))) if len(preds) > 0 else 1.0
-    print('$1 error=%f' % error)
-    error = (sum(1 for i in range(len(preds)) if abs(preds[i] - labels[i]) > 5) / float(len(preds))) if len(preds) > 0 else 1.0
-    print('$5 error=%f' % error)
-    error = (sum(1 for i in range(len(preds)) if abs(preds[i] - labels[i]) > 10) / float(len(preds))) if len(preds) > 0 else 1.0
-    print('$10 error=%f' % error)
-    error = (sum(1 for i in range(len(preds)) if abs(preds[i] - labels[i]) > 20) / float(len(preds))) if len(preds) > 0 else 1.0
-    print('$20 error=%f' % error)
+    e = (sum(1 for i in range(len(preds)) if abs(preds[i] - labels[i]) > allowance) / float(len(preds))) if len(preds) > 0 else 1.0
+    print('accuracy=%f' % e)
 
+    param = {'max_depth': 5, 'colsample_bytree': 0.3, 'eta': 0.3, 'verbosity': 1, 'objective': 'reg:squarederror', 'alpha': 10}
+    print('SQUARED_ERROR')
+
+    bst = xgb.train(param, dtrain, num_round, watchlist, early_stopping_rounds=5)
+    
+    preds = bst.predict(dtest)
+    e = (sum(1 for i in range(len(preds)) if abs(preds[i] - labels[i]) > allowance) / float(len(preds))) if len(preds) > 0 else 1.0
+    print('accuracy=%f' % e)
 
     cv_results = xgb.cv(dtrain=dtrain, params=param, nfold=3,
                         num_boost_round=50,early_stopping_rounds=10,metrics="rmse", seed=123, callbacks=[xgb.callback.print_evaluation(show_stdv=True)])
