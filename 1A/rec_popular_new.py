@@ -146,7 +146,7 @@ def encode_items(df_in):
     print("ITEM_META:", item_meta_list)
 
     df = df_in.copy()
-    df.loc[:, col_expl] = df[col_expl].apply(array_to_encoding)
+    df.loc[:, col_expl] = df[col_expl].apply(string_to_array).apply(array_to_encoding)
     # print("ENCODED:\n", df)
     return df
 
