@@ -42,6 +42,10 @@ user_id,session_id,timestamp,step,action_type,reference,platform,city,device,cur
 
 
 
+Session_vec: 0|0|0|0|0|0|0|0|0|0(<class 'str'>), Item_id: 2250926(<class 'int'>), Impressions: 2250926|131953|2817354|6100910|3375474|1810199|3801216|4569102|3204974|2247772|3203386|6200626|7752678|4800818|8114256|7202594(<class 'str'>)
+
+
+
 SUBMISSION
 
 user_id,session_id,timestamp,step,item_recommendations

@@ -151,7 +151,7 @@ def get_yhat(Xs, Xi, Ws, Wi, Vs, Vi, w0):
     return tf.add(linear_terms, interactions)
 
 def bpr(yhat_pos, yhat_neg):
-    return tf.reduce_mean(-tf.log(tf.nn.sigmoid(yhat_pos-yhat_neg)))
+    return tf.reduce_mean(-tf.log_sigmoid(yhat_pos-yhat_neg))
 def top1(yhat_pos, yhat_neg):
     # term1 = 
     return tf.reduce_mean(tf.nn.sigmoid(-yhat_pos+yhat_neg)+tf.nn.sigmoid(yhat_neg**2))  #, axis=0)
@@ -352,7 +352,7 @@ def main(data_path):
 
     # number of latent factors
     k = 5
-    batch_size = 1024
+    batch_size = 1024 * 2
 
     # design matrix
     Xs = tf.placeholder('float', shape=[None, p])
@@ -392,7 +392,7 @@ def main(data_path):
     loss_bpr = bpr(y_hat_pos, y_hat_neg)
     loss_top1 = top1(y_hat_pos, y_hat_neg)
 
-    eta = tf.constant(0.2)
+    eta = tf.constant(0.001)
     optimizer_bpr = tf.train.AdagradOptimizer(eta).minimize(loss_bpr)
     optimizer_top1 = tf.train.AdagradOptimizer(eta).minimize(loss_top1)
 

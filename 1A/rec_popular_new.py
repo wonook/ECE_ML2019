@@ -67,7 +67,7 @@ def get_yhat(Xs, Xi, Ws, Wi, Vs, Vi, w0):
     return tf.add(linear_terms, interactions)
 
 def bpr(yhat_pos, yhat_neg):
-    return tf.reduce_mean(-tf.log(tf.nn.sigmoid(yhat_pos-yhat_neg)))
+    return tf.reduce_mean(-tf.log_sigmoid(yhat_pos-yhat_neg))
 def top1(yhat_pos, yhat_neg):
     # term1 = 
     return tf.reduce_mean(tf.nn.sigmoid(-yhat_pos+yhat_neg)+tf.nn.sigmoid(yhat_neg**2))  #, axis=0)
@@ -82,7 +82,7 @@ def process_to_feeddata(df, item_dict):
     x_ip_vectors = []
     x_in_vectors = []
     for i in df[['session_vec', 'item_id', 'impressions']].itertuples(index=False):
-        print("Session_vec: {}({}), Item_id: {}({}), Impressions: {}({})".format(i[0], type(i[0]), i[1], type(i[1]), i[2], type(i[2])))
+        # print("Session_vec: {}({}), Item_id: {}({}), Impressions: {}({})".format(i[0], type(i[0]), i[1], type(i[1]), i[2], type(i[2])))
         for i_n in string_to_array(i[2]):
             if i[1] in item_dict and i_n in item_dict:
                 x_s_vectors.append(string_to_array(i[0]))
@@ -367,7 +367,7 @@ def main(data_path):
     loss_bpr = bpr(y_hat_pos, y_hat_neg)
     loss_top1 = top1(y_hat_pos, y_hat_neg)
 
-    eta = tf.constant(0.2)
+    eta = tf.constant(0.001)
     optimizer_bpr = tf.train.AdagradOptimizer(eta).minimize(loss_bpr)
     optimizer_top1 = tf.train.AdagradOptimizer(eta).minimize(loss_top1)
 
@@ -386,8 +386,10 @@ def main(data_path):
                 upper_bound = min(j + batch_size, len(df_train_encoded.index))
                 x_s_data, x_ip_data, x_in_data = process_to_feeddata(df_train_encoded.iloc[j:upper_bound], item_dict)
                 print("==BPR==")
-                optimizer_bpr_res, loss_bpr_res = sess.run([optimizer_bpr, loss_bpr], feed_dict={Xs: x_s_data, Xip: x_ip_data, Xin: x_in_data})
-                print('Loss:', loss_bpr_res)
+                optimizer_bpr_res, loss_bpr_res, yp, yn = sess.run([optimizer_bpr, loss_bpr, y_hat_pos, y_hat_neg], feed_dict={Xs: x_s_data, Xip: x_ip_data, Xin: x_in_data})
+                print('Loss: ', loss_bpr_res)
+                print('Y+: ', yp)
+                print('Y-: ', yn)
                 epoch_loss.append(loss_bpr_res)
             print('[epoch {}]: mean target value: {}'.format(epoch, np.mean(epoch_loss)))
 
