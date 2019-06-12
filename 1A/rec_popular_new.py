@@ -373,7 +373,7 @@ def main(data_path):
 
 
 
-    N_EPOCHS = 1
+    N_EPOCHS = 2
     # Launch the graph.
     init = tf.global_variables_initializer()
     print("Get popular items for BPR...")
