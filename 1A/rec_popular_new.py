@@ -341,7 +341,7 @@ def main(data_path):
 
     # number of latent factors
     k = 5
-    batch_size = 1024
+    batch_size = 1024 * 2
 
     # design matrix
     Xs = tf.placeholder('float', shape=[None, sec_vec_len])
