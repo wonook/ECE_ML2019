@@ -103,11 +103,12 @@ def merge_results(df, item_dict, results):
     for i in df[['session_vec', 'item_id', 'impressions', "user_id", "session_id", "timestamp", "step"]].itertuples(index=False):
         resultset = {}
         for i_n in string_to_array(i[2]):
-            resultset[results[i[0]][item_dict[i_n]]] = i_n
+            if i_n in item_dict and (i[0], item_dict[i_n]) in results:
+                resultset[results[(i[0], item_dict[i_n])].item(0)] = i_n
         result = []
-        for k, v in sorted(resultset.items()):
+        for k, v in sorted(resultset.items(), reverse=True):
             result.append(v)
-        arr.append(i[3], i[4], i[5], i[6], " ".join(result))
+        arr.append([i[3], i[4], i[5], i[6], " ".join([str(x) for x in result])])
     if arr:
         df_out = pd.DataFrame(np.array(arr), 
                               columns=["user_id", "session_id", "timestamp", "step", "item_recommendations"])
@@ -125,11 +126,15 @@ def save_item_meta_array(arr):
             item_meta_list.append(i)
 
 
+def array_to_str(arr):
+    return "|".join([str(x) for x in arr])
+
+
 def array_to_encoding(arr):
     encoding = np.zeros(len(item_meta_list), dtype=int)
     for i in arr:
         encoding[item_meta_list.index(i)] += 1
-    return "|".join([str(x) for x in encoding])
+    return array_to_str(encoding)
 
 
 def encode_items(df_in):
@@ -175,7 +180,7 @@ def encode_session(session_df):
         action_type = row['action_type']
         reference = row['reference']
         if action_type == 'clickout item':
-            arr.append([row['user_id'], row['timestamp'], row['step'], reference if reference is None or (not isinstance(reference, str) and math.isnan(reference)) else int(reference), row['impressions'], row['prices'], "|".join([str(x) for x in encoding])])
+            arr.append([row['user_id'], row['timestamp'], row['step'], reference if reference is None or (not isinstance(reference, str) and math.isnan(reference)) else int(reference), row['impressions'], row['prices'], array_to_str(encoding)])
         if reference not in session_ref_meta[action_type]:
             session_ref_meta[action_type].append(reference)
         encoding[session_meta_list.index(action_type)] = session_ref_meta[action_type].index(reference) + 1
@@ -396,10 +401,11 @@ def main(data_path):
         results_bpr = {}
         for j in range(0, len(df_test_encoded.index), batch_size):
             upper_bound = min(j + batch_size, len(df_test_encoded.index))
+            print("==BPR EVAL==", j, " to ", upper_bound, " among ", len(df_test_encoded.index))
             test_x_s_data, test_x_ip_data, test_x_in_data = process_to_feeddata(df_test_encoded.iloc[j:upper_bound], item_dict)
-            results_bpr.update(dict(zip(test_x_s_data, dict(zip(test_x_in_data, sess.run(y_hat_neg, feed_dict={Xs: test_x_s_data, Xin: test_x_in_data}))))))
+            results_bpr.update(dict(zip( list(zip (list(map(array_to_str, test_x_s_data)), list(map(array_to_str, test_x_in_data)))), sess.run(y_hat_neg, feed_dict={Xs: test_x_s_data, Xin: test_x_in_data}))))
         # print('Predictions:', results_bpr)
-        df_out_bpr = merge_results(df_train_encoded, results_bpr)
+        df_out_bpr = merge_results(df_test_encoded, item_dict, results_bpr)
         print("DF_OUT:\n", df_out_bpr)
         df_out_bpr.to_csv(subm_csv_bpr, index=False)
 
@@ -422,10 +428,11 @@ def main(data_path):
         results_top1 = {}
         for j in range(0, len(df_test_encoded.index), batch_size):
             upper_bound = min(j + batch_size, len(df_test_encoded.index))
+            print("==TOP1 EVAL==", j, " to ", upper_bound, " among ", len(df_test_encoded.index))
             test_x_s_data, test_x_ip_data, test_x_in_data = process_to_feeddata(df_test_encoded.iloc[j:upper_bound], item_dict)
-            results_top1.update(dict(zip(test_x_s_data, dict(zip(test_x_in_data, sess.run(y_hat_neg, feed_dict={Xs: test_x_s_data, Xin: test_x_in_data}))))))
+            results_top1.update(dict(zip( list(zip (list(map(array_to_str, test_x_s_data)), list(map(array_to_str, test_x_in_data)))), sess.run(y_hat_neg, feed_dict={Xs: test_x_s_data, Xin: test_x_in_data}))))
         # print('Predictions:', results_top1)
-        df_out_top1 = merge_results(df_train_encoded, results_top1)
+        df_out_top1 = merge_results(df_test_encoded, item_dict, results_top1)
         print("DF_OUT:\n", df_out_top1)
         df_out_top1.to_csv(subm_csv_top1, index=False)
 
