@@ -385,7 +385,7 @@ def main(data_path):
             for j in range(0, len(df_train_encoded.index), batch_size):
                 upper_bound = min(j + batch_size, len(df_train_encoded.index))
                 x_s_data, x_ip_data, x_in_data = process_to_feeddata(df_train_encoded.iloc[j:upper_bound], item_dict)
-                print("==BPR==")
+                print("==BPR==", j, " to ", upper_bound, " among ", len(df_train_encoded.index))
                 optimizer_bpr_res, loss_bpr_res, yp, yn = sess.run([optimizer_bpr, loss_bpr, y_hat_pos, y_hat_neg], feed_dict={Xs: x_s_data, Xip: x_ip_data, Xin: x_in_data})
                 print('Loss: ', loss_bpr_res)
                 print('Y+: ', yp)
@@ -413,7 +413,7 @@ def main(data_path):
             for j in range(0, len(df_train_encoded.index), batch_size):
                 upper_bound = min(j + batch_size, len(df_train_encoded.index))
                 x_s_data, x_ip_data, x_in_data = process_to_feeddata(df_train_encoded.iloc[j:upper_bound], item_dict)
-                print("==TOP1==")
+                print("==TOP1==", j, " to ", upper_bound, " among ", len(df_train_encoded.index))
                 optimizer_top1_res, loss_top1_res = sess.run([optimizer_top1, loss_top1], feed_dict={Xs: x_s_data, Xip: x_ip_data, Xin: x_in_data})
                 print('Loss:', loss_top1_res)
                 epoch_loss.append(loss_top1_res)
