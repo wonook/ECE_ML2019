@@ -335,7 +335,7 @@ def main(data_path):
 
 
     sec_vec_len = len(session_meta_list)
-    item_vec_len = len(item_meta_list)
+    item_vec_len = len(string_to_array(next(iter(item_dict.values()))))
 
 
 
