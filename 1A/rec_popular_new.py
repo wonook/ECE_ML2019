@@ -67,7 +67,7 @@ def get_yhat(Xs, Xi, Ws, Wi, Vs, Vi, w0):
     return tf.add(linear_terms, interactions)
 
 def bpr(yhat_pos, yhat_neg):
-    return tf.reduce_mean(-tf.log(tf.nn.sigmoid(yhat_pos-yhat_neg)))
+    return tf.reduce_mean(-tf.log_sigmoid(yhat_pos-yhat_neg))
 def top1(yhat_pos, yhat_neg):
     # term1 = 
     return tf.reduce_mean(tf.nn.sigmoid(-yhat_pos+yhat_neg)+tf.nn.sigmoid(yhat_neg**2))  #, axis=0)
@@ -82,7 +82,7 @@ def process_to_feeddata(df, item_dict):
     x_ip_vectors = []
     x_in_vectors = []
     for i in df[['session_vec', 'item_id', 'impressions']].itertuples(index=False):
-        print("Session_vec: {}({}), Item_id: {}({}), Impressions: {}({})".format(i[0], type(i[0]), i[1], type(i[1]), i[2], type(i[2])))
+        # print("Session_vec: {}({}), Item_id: {}({}), Impressions: {}({})".format(i[0], type(i[0]), i[1], type(i[1]), i[2], type(i[2])))
         for i_n in string_to_array(i[2]):
             if i[1] in item_dict and i_n in item_dict:
                 x_s_vectors.append(string_to_array(i[0]))
@@ -103,11 +103,12 @@ def merge_results(df, item_dict, results):
     for i in df[['session_vec', 'item_id', 'impressions', "user_id", "session_id", "timestamp", "step"]].itertuples(index=False):
         resultset = {}
         for i_n in string_to_array(i[2]):
-            resultset[results[i[0]][item_dict[i_n]]] = i_n
+            if i_n in item_dict and (i[0], item_dict[i_n]) in results:
+                resultset[results[(i[0], item_dict[i_n])].item(0)] = i_n
         result = []
-        for k, v in sorted(resultset.items()):
+        for k, v in sorted(resultset.items(), reverse=True):
             result.append(v)
-        arr.append(i[3], i[4], i[5], i[6], " ".join(result))
+        arr.append([i[3], i[4], i[5], i[6], " ".join([str(x) for x in result])])
     if arr:
         df_out = pd.DataFrame(np.array(arr), 
                               columns=["user_id", "session_id", "timestamp", "step", "item_recommendations"])
@@ -125,11 +126,15 @@ def save_item_meta_array(arr):
             item_meta_list.append(i)
 
 
+def array_to_str(arr):
+    return "|".join([str(x) for x in arr])
+
+
 def array_to_encoding(arr):
     encoding = np.zeros(len(item_meta_list), dtype=int)
     for i in arr:
         encoding[item_meta_list.index(i)] += 1
-    return "|".join([str(x) for x in encoding])
+    return array_to_str(encoding)
 
 
 def encode_items(df_in):
@@ -175,7 +180,7 @@ def encode_session(session_df):
         action_type = row['action_type']
         reference = row['reference']
         if action_type == 'clickout item':
-            arr.append([row['user_id'], row['timestamp'], row['step'], reference if reference is None or (not isinstance(reference, str) and math.isnan(reference)) else int(reference), row['impressions'], row['prices'], "|".join([str(x) for x in encoding])])
+            arr.append([row['user_id'], row['timestamp'], row['step'], reference if reference is None or (not isinstance(reference, str) and math.isnan(reference)) else int(reference), row['impressions'], row['prices'], array_to_str(encoding)])
         if reference not in session_ref_meta[action_type]:
             session_ref_meta[action_type].append(reference)
         encoding[session_meta_list.index(action_type)] = session_ref_meta[action_type].index(reference) + 1
@@ -335,13 +340,13 @@ def main(data_path):
 
 
     sec_vec_len = len(session_meta_list)
-    item_vec_len = len(item_meta_list)
+    item_vec_len = len(string_to_array(next(iter(item_dict.values()))))
 
 
 
     # number of latent factors
     k = 5
-    batch_size = 1024
+    batch_size = 1024 * 2
 
     # design matrix
     Xs = tf.placeholder('float', shape=[None, sec_vec_len])
@@ -367,13 +372,13 @@ def main(data_path):
     loss_bpr = bpr(y_hat_pos, y_hat_neg)
     loss_top1 = top1(y_hat_pos, y_hat_neg)
 
-    eta = tf.constant(0.2)
+    eta = tf.constant(0.001)
     optimizer_bpr = tf.train.AdagradOptimizer(eta).minimize(loss_bpr)
     optimizer_top1 = tf.train.AdagradOptimizer(eta).minimize(loss_top1)
 
 
 
-    N_EPOCHS = 50
+    N_EPOCHS = 2
     # Launch the graph.
     init = tf.global_variables_initializer()
     print("Get popular items for BPR...")
@@ -385,19 +390,22 @@ def main(data_path):
             for j in range(0, len(df_train_encoded.index), batch_size):
                 upper_bound = min(j + batch_size, len(df_train_encoded.index))
                 x_s_data, x_ip_data, x_in_data = process_to_feeddata(df_train_encoded.iloc[j:upper_bound], item_dict)
-                print("==BPR==")
-                optimizer_bpr_res, loss_bpr_res = sess.run([optimizer_bpr, loss_bpr], feed_dict={Xs: x_s_data, Xip: x_ip_data, Xin: x_in_data})
-                print('Loss:', loss_bpr_res)
+                print("==BPR==", j, " to ", upper_bound, " among ", len(df_train_encoded.index))
+                optimizer_bpr_res, loss_bpr_res, yp, yn = sess.run([optimizer_bpr, loss_bpr, y_hat_pos, y_hat_neg], feed_dict={Xs: x_s_data, Xip: x_ip_data, Xin: x_in_data})
+                print('Loss: ', loss_bpr_res)
+                print('Y+: ', yp)
+                print('Y-: ', yn)
                 epoch_loss.append(loss_bpr_res)
             print('[epoch {}]: mean target value: {}'.format(epoch, np.mean(epoch_loss)))
 
         results_bpr = {}
         for j in range(0, len(df_test_encoded.index), batch_size):
             upper_bound = min(j + batch_size, len(df_test_encoded.index))
+            print("==BPR EVAL==", j, " to ", upper_bound, " among ", len(df_test_encoded.index))
             test_x_s_data, test_x_ip_data, test_x_in_data = process_to_feeddata(df_test_encoded.iloc[j:upper_bound], item_dict)
-            results_bpr.update(dict(zip(test_x_s_data, dict(zip(test_x_in_data, sess.run(y_hat_neg, feed_dict={Xs: test_x_s_data, Xin: test_x_in_data}))))))
+            results_bpr.update(dict(zip( list(zip (list(map(array_to_str, test_x_s_data)), list(map(array_to_str, test_x_in_data)))), sess.run(y_hat_neg, feed_dict={Xs: test_x_s_data, Xin: test_x_in_data}))))
         # print('Predictions:', results_bpr)
-        df_out_bpr = merge_results(df_train_encoded, results_bpr)
+        df_out_bpr = merge_results(df_test_encoded, item_dict, results_bpr)
         print("DF_OUT:\n", df_out_bpr)
         df_out_bpr.to_csv(subm_csv_bpr, index=False)
 
@@ -411,7 +419,7 @@ def main(data_path):
             for j in range(0, len(df_train_encoded.index), batch_size):
                 upper_bound = min(j + batch_size, len(df_train_encoded.index))
                 x_s_data, x_ip_data, x_in_data = process_to_feeddata(df_train_encoded.iloc[j:upper_bound], item_dict)
-                print("==TOP1==")
+                print("==TOP1==", j, " to ", upper_bound, " among ", len(df_train_encoded.index))
                 optimizer_top1_res, loss_top1_res = sess.run([optimizer_top1, loss_top1], feed_dict={Xs: x_s_data, Xip: x_ip_data, Xin: x_in_data})
                 print('Loss:', loss_top1_res)
                 epoch_loss.append(loss_top1_res)
@@ -420,10 +428,11 @@ def main(data_path):
         results_top1 = {}
         for j in range(0, len(df_test_encoded.index), batch_size):
             upper_bound = min(j + batch_size, len(df_test_encoded.index))
+            print("==TOP1 EVAL==", j, " to ", upper_bound, " among ", len(df_test_encoded.index))
             test_x_s_data, test_x_ip_data, test_x_in_data = process_to_feeddata(df_test_encoded.iloc[j:upper_bound], item_dict)
-            results_top1.update(dict(zip(test_x_s_data, dict(zip(test_x_in_data, sess.run(y_hat_neg, feed_dict={Xs: test_x_s_data, Xin: test_x_in_data}))))))
+            results_top1.update(dict(zip( list(zip (list(map(array_to_str, test_x_s_data)), list(map(array_to_str, test_x_in_data)))), sess.run(y_hat_neg, feed_dict={Xs: test_x_s_data, Xin: test_x_in_data}))))
         # print('Predictions:', results_top1)
-        df_out_top1 = merge_results(df_train_encoded, results_top1)
+        df_out_top1 = merge_results(df_test_encoded, item_dict, results_top1)
         print("DF_OUT:\n", df_out_top1)
         df_out_top1.to_csv(subm_csv_top1, index=False)
 
